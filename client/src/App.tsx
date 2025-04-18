@@ -5,7 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
 import { getToken } from "firebase/messaging";
 import { messaging } from "./lib/firebase";
@@ -93,10 +93,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WebSocketProvider>
-          <Toaster />
-          <Router />
-        </WebSocketProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <Toaster />
+            <Router />
+          </WebSocketProvider>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
