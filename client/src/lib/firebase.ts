@@ -2,7 +2,6 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
-import { getMessaging, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -22,20 +21,19 @@ export const auth = getAuth(app);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
 
-// Initialize messaging - conditionally for browser support
-// Using a function instead of top-level await to avoid TypeScript errors
-export let messaging: ReturnType<typeof getMessaging> | null = null;
+// Initialize messaging conditionally (disabled for now until VAPID key is provided)
+export let messaging: null = null;
 
-// Initialize messaging asynchronously
-const initializeMessaging = async () => {
-  if (await isSupported()) {
-    messaging = getMessaging(app);
-  }
-};
-
-initializeMessaging().catch(error => {
-  console.error("Error initializing Firebase messaging:", error);
-});
+// Commented out messaging initialization until VAPID key is available
+// const initializeMessaging = async () => {
+//   if (await isSupported()) {
+//     messaging = getMessaging(app);
+//   }
+// };
+// 
+// initializeMessaging().catch(error => {
+//   console.error("Error initializing Firebase messaging:", error);
+// });
 
 // Data cleanup functions
 export const setupDataCleanup = () => {

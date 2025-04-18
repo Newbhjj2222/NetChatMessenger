@@ -7,8 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
-import { getToken } from "firebase/messaging";
-import { messaging } from "./lib/firebase";
 
 // Lazy loaded components
 const Login = lazy(() => import("@/pages/Login"));
@@ -27,19 +25,16 @@ function Router() {
 
   const requestNotificationPermission = async () => {
     try {
-      if (messaging) {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          // Get FCM token
-          const token = await getToken(messaging, {
-            vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY || ""
-          });
-
-          if (token) {
-            // Send the token to the server
-            console.log("Notification permission granted. Token:", token);
-          }
-        }
+      // Check if browser supports notifications
+      if (!("Notification" in window)) {
+        console.log("This browser does not support desktop notification");
+        return;
+      }
+      
+      // Request permission without FCM (using native browser notifications)
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        console.log("Notification permission granted.");
       }
     } catch (error) {
       console.error("Error requesting notification permission:", error);
