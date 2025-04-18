@@ -1,6 +1,7 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 // Users table
 export const users = pgTable("users", {
@@ -123,6 +124,82 @@ export const insertInviteSchema = createInsertSchema(invites).pick({
   createdBy: true,
   expiresAt: true,
 });
+
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  messages: many(messages, { relationName: "user_messages" }),
+  statuses: many(statuses),
+  chatMembers: many(chatMembers),
+  createdChats: many(chats, { relationName: "created_chats" }),
+  outgoingCalls: many(calls, { relationName: "outgoing_calls" }),
+  incomingCalls: many(calls, { relationName: "incoming_calls" }),
+  createdInvites: many(invites),
+}));
+
+export const chatsRelations = relations(chats, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [chats.createdBy],
+    references: [users.id],
+    relationName: "created_chats"
+  }),
+  members: many(chatMembers),
+  messages: many(messages),
+  invites: many(invites),
+}));
+
+export const chatMembersRelations = relations(chatMembers, ({ one }) => ({
+  chat: one(chats, {
+    fields: [chatMembers.chatId],
+    references: [chats.id]
+  }),
+  user: one(users, {
+    fields: [chatMembers.userId],
+    references: [users.id]
+  }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  chat: one(chats, {
+    fields: [messages.chatId],
+    references: [chats.id]
+  }),
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
+    relationName: "user_messages"
+  }),
+}));
+
+export const statusesRelations = relations(statuses, ({ one }) => ({
+  user: one(users, {
+    fields: [statuses.userId],
+    references: [users.id]
+  }),
+}));
+
+export const callsRelations = relations(calls, ({ one }) => ({
+  caller: one(users, {
+    fields: [calls.callerId],
+    references: [users.id],
+    relationName: "outgoing_calls"
+  }),
+  receiver: one(users, {
+    fields: [calls.receiverId],
+    references: [users.id],
+    relationName: "incoming_calls"
+  }),
+}));
+
+export const invitesRelations = relations(invites, ({ one }) => ({
+  chat: one(chats, {
+    fields: [invites.chatId],
+    references: [chats.id]
+  }),
+  creator: one(users, {
+    fields: [invites.createdBy],
+    references: [users.id]
+  }),
+}));
 
 // Types
 export type User = typeof users.$inferSelect;

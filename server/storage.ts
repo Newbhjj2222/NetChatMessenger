@@ -1,4 +1,9 @@
-import { users, messages, chats, User, Chat, Message, InsertUser, InsertChat, InsertMessage } from "@shared/schema";
+import { 
+  users, chats, chatMembers, messages, statuses,
+  User, Chat, Message, InsertUser, InsertChat, InsertMessage 
+} from "@shared/schema";
+import { eq, and, lt, asc, inArray, or } from "drizzle-orm";
+import { db } from "./db";
 
 // Storage interface for user CRUD operations
 export interface IStorage {
@@ -26,141 +31,190 @@ export interface IStorage {
   deleteOldStatuses(days: number): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private usersStore: Map<number, User>;
-  private chatsStore: Map<number, Chat>;
-  private messagesStore: Map<number, Message>;
-  private userIdCounter: number;
-  private chatIdCounter: number;
-  private messageIdCounter: number;
-
-  constructor() {
-    this.usersStore = new Map();
-    this.chatsStore = new Map();
-    this.messagesStore = new Map();
-    this.userIdCounter = 1;
-    this.chatIdCounter = 1;
-    this.messageIdCounter = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.usersStore.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.usersStore.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async getAllUsers(): Promise<User[]> {
-    return Array.from(this.usersStore.values());
+    return await db.select().from(users);
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const newUser: User = { ...user, id, createdAt: new Date() };
-    this.usersStore.set(id, newUser);
+    const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
 
   async updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined> {
-    const user = await this.getUser(id);
-    if (!user) return undefined;
-    
-    const updatedUser: User = { ...user, ...data };
-    this.usersStore.set(id, updatedUser);
+    const [updatedUser] = await db
+      .update(users)
+      .set(data)
+      .where(eq(users.id, id))
+      .returning();
     return updatedUser;
   }
 
   async deleteUser(id: number): Promise<void> {
-    this.usersStore.delete(id);
+    await db.delete(users).where(eq(users.id, id));
   }
 
   // Chat operations
   async getChat(id: number): Promise<Chat | undefined> {
-    return this.chatsStore.get(id);
+    const [chat] = await db.select().from(chats).where(eq(chats.id, id));
+    
+    if (!chat) return undefined;
+    
+    const members = await db
+      .select()
+      .from(chatMembers)
+      .where(eq(chatMembers.chatId, id));
+    
+    return {
+      ...chat,
+      members: members.map(m => ({
+        userId: m.userId,
+        isAdmin: m.isAdmin || false,
+        joinedAt: m.joinedAt || new Date(),
+      })),
+    };
   }
 
   async getUserChats(userId: number): Promise<Chat[]> {
-    return Array.from(this.chatsStore.values()).filter(chat => 
-      chat.members.some(member => member.userId === userId)
-    );
+    // Get chat IDs that the user is a member of
+    const memberChats = await db
+      .select({ chatId: chatMembers.chatId })
+      .from(chatMembers)
+      .where(eq(chatMembers.userId, userId));
+    
+    if (memberChats.length === 0) return [];
+    
+    const chatIds = memberChats.map(c => c.chatId);
+    
+    // Get the chats
+    const userChats = await db
+      .select()
+      .from(chats)
+      .where(inArray(chats.id, chatIds));
+    
+    // Get all chat members for these chats
+    const allMembers = await db
+      .select()
+      .from(chatMembers)
+      .where(inArray(chatMembers.chatId, chatIds));
+    
+    // Organize members by chat
+    const membersByChatId: Record<number, { userId: number; isAdmin: boolean; joinedAt: Date }[]> = {};
+    
+    for (const member of allMembers) {
+      if (!membersByChatId[member.chatId]) {
+        membersByChatId[member.chatId] = [];
+      }
+      
+      membersByChatId[member.chatId].push({
+        userId: member.userId,
+        isAdmin: member.isAdmin || false,
+        joinedAt: member.joinedAt || new Date(),
+      });
+    }
+    
+    // Combine chats with their members
+    return userChats.map(chat => ({
+      ...chat,
+      members: membersByChatId[chat.id] || [],
+    }));
   }
 
   async createChat(chat: InsertChat): Promise<Chat> {
-    const id = this.chatIdCounter++;
-    const newChat: Chat = { ...chat, id, createdAt: new Date() };
-    this.chatsStore.set(id, newChat);
-    return newChat;
+    const [newChat] = await db.insert(chats).values(chat).returning();
+    
+    return {
+      ...newChat,
+      members: [],
+    };
   }
 
   async addUserToChat(chatId: number, userId: number, isAdmin: boolean): Promise<void> {
-    const chat = await this.getChat(chatId);
-    if (!chat) throw new Error("Chat not found");
-    
-    if (!chat.members.some(member => member.userId === userId)) {
-      chat.members.push({
-        userId,
-        isAdmin,
-        joinedAt: new Date()
-      });
-      this.chatsStore.set(chatId, chat);
-    }
+    await db.insert(chatMembers).values({
+      chatId,
+      userId,
+      isAdmin,
+    });
   }
 
   async removeUserFromChat(chatId: number, userId: number): Promise<void> {
-    const chat = await this.getChat(chatId);
-    if (!chat) throw new Error("Chat not found");
-    
-    chat.members = chat.members.filter(member => member.userId !== userId);
-    this.chatsStore.set(chatId, chat);
+    await db
+      .delete(chatMembers)
+      .where(
+        and(
+          eq(chatMembers.chatId, chatId),
+          eq(chatMembers.userId, userId)
+        )
+      );
   }
 
   // Message operations
   async getMessage(id: number): Promise<Message | undefined> {
-    return this.messagesStore.get(id);
+    const [message] = await db.select().from(messages).where(eq(messages.id, id));
+    return message;
   }
 
   async getChatMessages(chatId: number): Promise<Message[]> {
-    return Array.from(this.messagesStore.values()).filter(
-      message => message.chatId === chatId
-    );
+    return await db
+      .select()
+      .from(messages)
+      .where(eq(messages.chatId, chatId))
+      .orderBy(asc(messages.createdAt));
   }
 
   async createMessage(message: InsertMessage): Promise<Message> {
-    const id = this.messageIdCounter++;
-    const newMessage: Message = { 
-      ...message, 
-      id, 
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000) // 10 days
-    };
-    this.messagesStore.set(id, newMessage);
+    // Set expiration 10 days from now
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 10);
+    
+    const [newMessage] = await db
+      .insert(messages)
+      .values({
+        ...message,
+        expiresAt
+      })
+      .returning();
+    
     return newMessage;
   }
 
   async deleteMessage(id: number): Promise<void> {
-    this.messagesStore.delete(id);
+    await db.delete(messages).where(eq(messages.id, id));
   }
 
   async deleteOldMessages(days: number): Promise<void> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
     
-    for (const [id, message] of this.messagesStore.entries()) {
-      if (message.createdAt < cutoffDate || (message.expiresAt && message.expiresAt < new Date())) {
-        this.messagesStore.delete(id);
-      }
-    }
+    await db
+      .delete(messages)
+      .where(
+        or(
+          lt(messages.createdAt, cutoff),
+          lt(messages.expiresAt, new Date())
+        )
+      );
   }
 
   async deleteOldStatuses(days: number): Promise<void> {
-    // In a real implementation, we would have a separate table for statuses
-    // This is a placeholder for the Firebase implementation
-    console.log(`Deleting statuses older than ${days} days`);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    
+    await db
+      .delete(statuses)
+      .where(lt(statuses.createdAt, cutoff));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
