@@ -1,0 +1,44 @@
+Using HTML, CSS, and JavaScript code only in js format, build me an application called NetChat that looks 100% exactly like WhatsApp but different on logo. It should allow users to exchange messages between themselves. It must support creating groups that can have up to 1000 members, and the website admin should be able to access the groups at any time, view messages, and have the ability to write only if granted permission by the admin, just like WhatsApp.
+
+It should have a status feature that works like an advertisement, showing the number of views per status and displaying the view count. It should also include a nice-looking profile page, similar to WhatsApp's.
+
+Users should be able to share an invitation link so that when another person clicks it, they can instantly register on the platform.
+
+Registration and login should happen in real-time. The app should allow users to permanently delete their accounts or edit their account details. Each status should be programmed to automatically delete after 3 days from the database. Likewise, messages, whether text or images, should automatically delete after 10 days.
+
+The app must be able to send notifications to the user's device when they receive a message, whether it's a personal message or in a group.
+
+All data must be stored in Firebase Realtime Database.
+
+Here’s how I want it:
+
+The first page should be the login page, using email and password.
+
+Include a link for new users that redirects to the registration page.
+
+Registration should require a username, profile picture, email, and password.
+
+Once logged in, the user should be redirected to the chat page, which contains all the features mentioned above and a menu with dropdown access to other pages.
+
+Use icons to make the interface look good. make it responsive media.
+.
+and use firebase configuration inside the project no problem: 
+
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAoYySL7E7CpiqrMhq6ZUknAlYokEze9oQ",
+  authDomain: "newtalentsg-ccaee.firebaseapp.com",
+  databaseURL: "https://newtalentsg-ccaee-default-rtdb.firebaseio.com",
+  projectId: "newtalentsg-ccaee",
+  storageBucket: "newtalentsg-ccaee.firebasestorage.app",
+  messagingSenderId: "677114617884",
+  appId: "1:677114617884:web:8e5776b45f1163ba67ffd9"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
