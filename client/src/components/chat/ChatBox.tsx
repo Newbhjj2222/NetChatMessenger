@@ -4,6 +4,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
+import { useWebSocket } from "@/contexts/WebSocketContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Message from "./Message";
@@ -23,10 +24,13 @@ const ChatBox: React.FC = () => {
   const [newMessage, setNewMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const { currentUser } = useAuth();
   const { selectedChat } = useChat();
+  const { sendMessage, sendTypingIndicator, connectionStatus } = useWebSocket();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!currentUser || !selectedChat) return;
@@ -135,6 +139,11 @@ const ChatBox: React.FC = () => {
                   unreadCount: unreadCount + 1,
                 });
               }, { onlyOnce: true });
+              
+              // Send real-time message via WebSocket for immediate delivery
+              if (connectionStatus === 'connected') {
+                sendMessage(memberId, newMessage);
+              }
             }
           });
         } else {
@@ -154,10 +163,25 @@ const ChatBox: React.FC = () => {
               unreadCount: unreadCount + 1,
             });
           }, { onlyOnce: true });
+          
+          // Send real-time message via WebSocket for immediate delivery
+          if (connectionStatus === 'connected' && recipientId) {
+            sendMessage(recipientId, newMessage);
+          }
         }
       }
       
-      // Reset form
+      // Reset typing indicator and form
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      
+      if (recipientId && connectionStatus === 'connected') {
+        sendTypingIndicator(recipientId, false);
+      }
+      
+      setIsTyping(false);
       setNewMessage("");
       setSelectedImage(null);
     } catch (error) {
@@ -181,6 +205,35 @@ const ChatBox: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedImage(e.target.files[0]);
+    }
+  };
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    
+    // If we have a recipient and WebSocket is connected, send typing indicator
+    if (currentUser && selectedChat && connectionStatus === 'connected') {
+      const recipientId = selectedChat.isGroup ? "" : Object.keys(selectedChat.members || {}).find(id => id !== currentUser.uid);
+      
+      if (recipientId) {
+        // Set isTyping to true
+        if (!isTyping) {
+          setIsTyping(true);
+          sendTypingIndicator(recipientId, true);
+        }
+        
+        // Clear existing timeout
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        
+        // Set timeout to stop typing indicator after 2 seconds of inactivity
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+          sendTypingIndicator(recipientId, false);
+          typingTimeoutRef.current = null;
+        }, 2000);
+      }
     }
   };
 
@@ -312,7 +365,7 @@ const ChatBox: React.FC = () => {
             placeholder="Type a message"
             className="w-full py-2 px-3 bg-white text-text-primary rounded-full focus:outline-none"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={handleKeyPress}
             disabled={loading}
           />

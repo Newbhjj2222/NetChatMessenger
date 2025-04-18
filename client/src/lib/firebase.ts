@@ -23,7 +23,19 @@ export const db = getDatabase(app);
 export const storage = getStorage(app);
 
 // Initialize messaging - conditionally for browser support
-export const messaging = await isSupported() ? getMessaging(app) : null;
+// Using a function instead of top-level await to avoid TypeScript errors
+export let messaging: ReturnType<typeof getMessaging> | null = null;
+
+// Initialize messaging asynchronously
+const initializeMessaging = async () => {
+  if (await isSupported()) {
+    messaging = getMessaging(app);
+  }
+};
+
+initializeMessaging().catch(error => {
+  console.error("Error initializing Firebase messaging:", error);
+});
 
 // Data cleanup functions
 export const setupDataCleanup = () => {
