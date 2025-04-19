@@ -29,14 +29,18 @@ function Router() {
       if (messaging) {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-          // Get FCM token
-          const token = await getToken(messaging, {
-            vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY || ""
-          });
-
-          if (token) {
-            // Send the token to the server
-            console.log("Notification permission granted. Token:", token);
+          // Get FCM token, only if messaging is initialized and VAPID key is available
+          if (messaging && import.meta.env.VITE_FIREBASE_VAPID_KEY) {
+            const token = await getToken(messaging, {
+              vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+            });
+            
+            if (token) {
+              // Send the token to the server
+              console.log("Notification permission granted. Token:", token);
+            }
+          } else {
+            console.log("Messaging not available or VAPID key missing");
           }
         }
       }

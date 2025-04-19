@@ -5,13 +5,11 @@ import { getStorage } from "firebase/storage";
 import { getMessaging, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAoYySL7E7CpiqrMhq6ZUknAlYokEze9oQ",
-  authDomain: "newtalentsg-ccaee.firebaseapp.com",
-  databaseURL: "https://newtalentsg-ccaee-default-rtdb.firebaseio.com",
-  projectId: "newtalentsg-ccaee",
-  storageBucket: "newtalentsg-ccaee.firebasestorage.app",
-  messagingSenderId: "677114617884",
-  appId: "1:677114617884:web:8e5776b45f1163ba67ffd9"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase
@@ -23,7 +21,16 @@ export const db = getDatabase(app);
 export const storage = getStorage(app);
 
 // Initialize messaging - conditionally for browser support
-export const messaging = await isSupported() ? getMessaging(app) : null;
+export let messaging: ReturnType<typeof getMessaging> | null = null;
+
+// Initialize messaging asynchronously
+const initializeMessaging = async () => {
+  if (await isSupported()) {
+    messaging = getMessaging(app);
+  }
+};
+
+initializeMessaging();
 
 // Data cleanup functions
 export const setupDataCleanup = () => {
