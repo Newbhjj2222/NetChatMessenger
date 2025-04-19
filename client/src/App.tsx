@@ -26,23 +26,37 @@ function Router() {
 
   const requestNotificationPermission = async () => {
     try {
-      if (messaging) {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          // Get FCM token, only if messaging is initialized and VAPID key is available
-          if (messaging && import.meta.env.VITE_FIREBASE_VAPID_KEY) {
-            const token = await getToken(messaging, {
-              vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
-            });
-            
-            if (token) {
-              // Send the token to the server
-              console.log("Notification permission granted. Token:", token);
-            }
-          } else {
-            console.log("Messaging not available or VAPID key missing");
-          }
+      // Check if messaging is available
+      if (!messaging) {
+        console.log("Firebase messaging is not available in this browser");
+        return;
+      }
+      
+      // Request notification permission
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        console.log("Notification permission denied");
+        return;
+      }
+      
+      // Check if we have the VAPID key
+      if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) {
+        console.log("Firebase VAPID key is missing");
+        return;
+      }
+      
+      // Get FCM token
+      try {
+        const token = await getToken(messaging, {
+          vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+        });
+        
+        if (token) {
+          console.log("Notification permission granted. Token:", token);
+          // Here you would typically send this token to your server
         }
+      } catch (tokenError) {
+        console.error("Error getting token:", tokenError);
       }
     } catch (error) {
       console.error("Error requesting notification permission:", error);
