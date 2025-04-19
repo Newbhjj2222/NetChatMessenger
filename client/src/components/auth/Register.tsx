@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { ref as dbRef, set } from "firebase/database";
-import { storage, db } from "@/lib/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import { auth, storage, db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,6 @@ const Register: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { register } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -42,8 +41,31 @@ const Register: React.FC = () => {
 
     try {
       // Create user
-      await register(email, password, username);
-      
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Upload profile picture if available
+      let photoURL = "";
+      if (profileImage) {
+        const storageRef = ref(storage, `profiles/${user.uid}`);
+        await uploadBytes(storageRef, profileImage);
+        photoURL = await getDownloadURL(storageRef);
+      }
+
+      // Update profile
+      await updateProfile(user, {
+        displayName: username,
+        photoURL: photoURL || "",
+      });
+
+      // Save user data to database
+      await set(dbRef(db, `users/${user.uid}`), {
+        username,
+        email,
+        photoURL,
+        createdAt: Date.now(),
+      });
+
       navigate("/");
       toast({
         title: "Registration successful",

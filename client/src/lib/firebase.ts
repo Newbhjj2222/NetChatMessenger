@@ -2,15 +2,16 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
+import { getMessaging, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
-  databaseURL: `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
+  apiKey: "AIzaSyAoYySL7E7CpiqrMhq6ZUknAlYokEze9oQ",
+  authDomain: "newtalentsg-ccaee.firebaseapp.com",
+  databaseURL: "https://newtalentsg-ccaee-default-rtdb.firebaseio.com",
+  projectId: "newtalentsg-ccaee",
+  storageBucket: "newtalentsg-ccaee.firebasestorage.app",
   messagingSenderId: "677114617884",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  appId: "1:677114617884:web:8e5776b45f1163ba67ffd9"
 };
 
 // Initialize Firebase
@@ -21,19 +22,8 @@ export const auth = getAuth(app);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
 
-// Initialize messaging conditionally (disabled for now until VAPID key is provided)
-export let messaging: null = null;
-
-// Commented out messaging initialization until VAPID key is available
-// const initializeMessaging = async () => {
-//   if (await isSupported()) {
-//     messaging = getMessaging(app);
-//   }
-// };
-// 
-// initializeMessaging().catch(error => {
-//   console.error("Error initializing Firebase messaging:", error);
-// });
+// Initialize messaging - conditionally for browser support
+export const messaging = await isSupported() ? getMessaging(app) : null;
 
 // Data cleanup functions
 export const setupDataCleanup = () => {

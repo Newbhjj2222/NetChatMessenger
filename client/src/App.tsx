@@ -1,13 +1,13 @@
 import { useEffect, lazy, Suspense } from "react";
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { useAuth, AuthProvider } from "./contexts/AuthContext";
-import { WebSocketProvider } from "./contexts/WebSocketContext";
-import { ChatProvider } from "./contexts/ChatContext";
+import { useAuth } from "./contexts/AuthContext";
+import { getToken } from "firebase/messaging";
+import { messaging } from "./lib/firebase";
 
 // Lazy loaded components
 const Login = lazy(() => import("@/pages/Login"));
@@ -15,22 +15,9 @@ const Register = lazy(() => import("@/pages/Register"));
 const Home = lazy(() => import("@/pages/Home"));
 const Profile = lazy(() => import("@/pages/Profile"));
 
-// Loading component
-const LoadingScreen = () => (
-  <div className="h-screen flex items-center justify-center bg-gray-100">
-    <div className="text-center">
-      <div className="w-16 h-16 border-t-4 border-primary border-solid rounded-full animate-spin mx-auto mb-4"></div>
-      <p className="text-gray-600">Loading NetChat...</p>
-    </div>
-  </div>
-);
+function Router() {
+  const { currentUser } = useAuth();
 
-// Route wrapper with authentication
-function RouteManager() {
-  const { currentUser, loading } = useAuth();
-  const [, navigate] = useLocation();
-  
-  // Handle notifications
   useEffect(() => {
     if (currentUser) {
       requestNotificationPermission();
@@ -39,71 +26,64 @@ function RouteManager() {
 
   const requestNotificationPermission = async () => {
     try {
-      if (!("Notification" in window)) {
-        console.log("This browser does not support desktop notification");
-        return;
-      }
-      
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        console.log("Notification permission granted.");
+      if (messaging) {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          // Get FCM token
+          const token = await getToken(messaging, {
+            vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY || ""
+          });
+
+          if (token) {
+            // Send the token to the server
+            console.log("Notification permission granted. Token:", token);
+          }
+        }
       }
     } catch (error) {
       console.error("Error requesting notification permission:", error);
     }
   };
 
-  // Redirect based on auth state
-  useEffect(() => {
-    if (!loading) {
-      const pathname = window.location.pathname;
-      const isAuthRoute = pathname === "/login" || pathname === "/register";
-      
-      if (!currentUser && !isAuthRoute) {
-        navigate("/login");
-      } else if (currentUser && isAuthRoute) {
-        navigate("/");
-      }
-    }
-  }, [currentUser, loading, navigate]);
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
   return (
     <Switch>
       <Route path="/login">
-        <Suspense fallback={<LoadingScreen />}>
-          <Login />
-        </Suspense>
+        {currentUser ? (
+          <Home />
+        ) : (
+          <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
+            <Login />
+          </Suspense>
+        )}
       </Route>
       <Route path="/register">
-        <Suspense fallback={<LoadingScreen />}>
-          <Register />
-        </Suspense>
+        {currentUser ? (
+          <Home />
+        ) : (
+          <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
+            <Register />
+          </Suspense>
+        )}
       </Route>
       <Route path="/profile">
         {currentUser ? (
-          <Suspense fallback={<LoadingScreen />}>
+          <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
             <Profile />
           </Suspense>
         ) : (
-          <LoadingScreen />
+          <Login />
         )}
       </Route>
       <Route path="/">
         {currentUser ? (
-          <Suspense fallback={<LoadingScreen />}>
+          <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
             <Home />
           </Suspense>
         ) : (
-          <LoadingScreen />
+          <Login />
         )}
       </Route>
-      <Route>
-        <NotFound />
-      </Route>
+      <Route component={NotFound} />
     </Switch>
   );
 }
@@ -112,14 +92,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>
-          <ChatProvider>
-            <WebSocketProvider>
-              <Toaster />
-              <RouteManager />
-            </WebSocketProvider>
-          </ChatProvider>
-        </AuthProvider>
+        <Toaster />
+        <Router />
       </TooltipProvider>
     </QueryClientProvider>
   );
